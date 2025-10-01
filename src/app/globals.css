@@ -120,3 +120,107 @@
     @apply bg-background text-foreground;
   }
 }
+/* ==== react-calendar tidy ==== */
+.react-calendar {
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+}
+.react-calendar__navigation {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin-bottom: 8px; /* ←曜日行との間隔を一定に */
+}
+.react-calendar__navigation button {
+  min-width: 32px;
+  background: transparent;
+}
+/* 曜日ヘッダ：下線を消して高さを揃える */
+.react-calendar__month-view__weekdays {
+  text-align: center;
+  font-size: 12px;
+  color: #6b7280; /* text-neutral-500 */
+}
+.react-calendar__month-view__weekdays__weekday abbr[title] {
+  text-decoration: none;
+  display: inline-block;
+  line-height: 1;      /* ←ここがズレ修正の肝 */
+  padding: 4px 0;
+  white-space: nowrap; /* 折返し防止 */
+}
+/* 日付タイル：高さ固定で縦リズム統一 */
+.react-calendar__tile {
+  padding: 6px 0;
+  height: 36px;        /* 同一高さで段ズレ防止 */
+}
+.react-calendar__tile--now {
+  background: #fff7ed; /* amber-50相当（今日） */
+}
+.react-calendar__tile--active {
+  background: #f3f4f6; /* neutral-100 */
+  color: inherit;
+}
+.react-calendar__month-view__days {
+  row-gap: 4px;        /* 週の行間を一定に */
+}
+/* 週末の既定色を無効化（自前で色付けするため） */
+.react-calendar__month-view__days__day--weekend {
+  color: inherit;
+}
+/* ===== 微調整（縦ズレ・余白ズレ対策）===== */
+
+/* すべてを同じ計算にする */
+.react-calendar, 
+.react-calendar * { box-sizing: border-box; }
+
+/* 7列を常に完全均等割り */
+.react-calendar__month-view__weekdays,
+.react-calendar__month-view__days {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+}
+
+/* 曜日セルを正確に中央揃え＋同一高さ */
+.react-calendar__month-view__weekdays__weekday {
+  display: grid;
+  place-items: center;
+  height: 28px;              /* お好みで 24–32px */
+  margin: 0;
+  padding: 0;
+  font-variant-numeric: tabular-nums; /* 数字幅を揃える */
+}
+.react-calendar__month-view__weekdays__weekday abbr[title] {
+  line-height: 1;
+  padding: 0;
+}
+
+/* 日付セルは中身をブロック化してベースライン差を排除 */
+.react-calendar__tile {
+  height: 36px;              /* 既存の指定を活かす */
+  padding: 0;
+  display: grid;
+  place-items: center;
+}
+.react-calendar__tile abbr {
+  display: block;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 今日や選択中の装飾を “背景のみ” にして高さを変えない */
+.react-calendar__tile--now { background: #fff7ed; }
+.react-calendar__tile--active { background: #f3f4f6; color: inherit; }
+
+/* 週行の間隔を一定に（見た目の詰まりを防止） */
+.react-calendar__month-view__days { row-gap: 4px; }
+
+/* 週末色は自前で付けるのでリセット */
+.react-calendar__month-view__days__day--weekend { color: inherit; }
+
+/* タイル下のドットなどの追加要素で高さが変わらないように */
+.react-calendar__tile .dot {
+  width: 6px; height: 6px; border-radius: 9999px;
+  margin-top: 2px;
+}

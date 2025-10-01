@@ -156,7 +156,8 @@ export default function App() {
     } else if (!liftsOfCurrentPart.find(l => l.id === form.liftId)) {
       setForm(f => ({ ...f, liftId: liftsOfCurrentPart[0].id as LiftId }));
     }
-  }, [form.part, liftsOfCurrentPart]);
+    // ESLint: form.liftId も依存に含めておく
+  }, [form.part, form.liftId, liftsOfCurrentPart]);
 
   /** ---- 直近大会 ---- */
   const today = todayISO();
@@ -220,12 +221,15 @@ export default function App() {
                 {Math.max(0, Math.ceil((new Date(upcoming.date).getTime() - Date.now()) / (1000*3600*24)))}日!
               </div>
             )}
-            <Button variant="outline" onClick={()=>setShowHelp(true)}><HelpCircle className="w-4 h-4 mr-1"/>ヘルプ</Button>
+            <Button className="inline-flex items-center gap-2" variant="outline" onClick={()=>setShowHelp(true)}>
+              <HelpCircle className="w-4 h-4 mr-1"/>ヘルプ
+            </Button>
           </div>
         </header>
 
         <Tabs defaultValue="log">
-          <TabsList className="grid grid-cols-4 w-full md:w-auto">
+          {/* 均等幅→md以降は自動幅に切り替え */}
+          <TabsList className="w-full grid grid-cols-4 md:inline-flex md:w-auto">
             <TabsTrigger value="log">記録</TabsTrigger>
             <TabsTrigger value="stats">統計</TabsTrigger>
             <TabsTrigger value="calendar">カレンダー</TabsTrigger>
@@ -236,10 +240,10 @@ export default function App() {
           <TabsContent value="log" className="space-y-4">
             {/* フィルタUI */}
             <Card className="shadow-sm">
-              <CardContent className="p-4 grid grid-cols-2 md:grid-cols-6 gap-3 md:items-end">
+              <CardContent className="p-4 grid grid-cols-2 md:grid-cols-6 gap-3 md:items-center">
                 <div>
                   <label className="text-xs text-neutral-500">日付で絞り込み</label>
-                  <Input type="date" value={fDate} onChange={e=>setFDate(e.target.value)} />
+                  <Input className="h-9" type="date" value={fDate} onChange={e=>setFDate(e.target.value)} />
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">部位で絞り込み</label>
@@ -247,7 +251,7 @@ export default function App() {
                     value={fPart}
                     onValueChange={(v)=>{ setFPart(v === "All" ? "All" : (v as Part)); setFLift("All"); }}
                   >
-                    <SelectTrigger><SelectValue placeholder="すべて" /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="すべて" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">すべて</SelectItem>
                       {parts.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
@@ -260,7 +264,7 @@ export default function App() {
                     value={fLift}
                     onValueChange={(v)=> setFLift(v === "All" ? "All" : (v as LiftId))}
                   >
-                    <SelectTrigger><SelectValue placeholder="すべて" /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="すべて" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">すべて</SelectItem>
                       {(fPart==="All" ? lifts : lifts.filter(l=>l.part===fPart)).map(l =>
@@ -270,7 +274,10 @@ export default function App() {
                   </Select>
                 </div>
                 <div className="flex gap-2 col-span-2 md:col-span-3">
-                  <Button variant="outline" className="w-full md:w-[120px]" onClick={()=>{ setFDate(""); setFPart("All"); setFLift("All"); }}>クリア</Button>
+                  <Button className="inline-flex items-center gap-2 w-full md:w-[120px]" variant="outline"
+                    onClick={()=>{ setFDate(""); setFPart("All"); setFLift("All"); }}>
+                    クリア
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -304,15 +311,15 @@ export default function App() {
 
             {/* 入力フォーム */}
             <Card className="shadow-sm">
-              <CardContent className="p-4 grid grid-cols-2 md:grid-cols-8 gap-3 items-end">
+              <CardContent className="p-4 grid grid-cols-2 md:grid-cols-8 gap-3 items-center">
                 <div>
                   <label className="text-xs text-neutral-500">日付</label>
-                  <Input type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/>
+                  <Input className="h-9" type="date" value={form.date} onChange={e=>setForm({...form, date:e.target.value})}/>
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">部位</label>
                   <Select value={form.part} onValueChange={(v)=> setForm({...form, part:v as Part})}>
-                    <SelectTrigger><SelectValue placeholder="選択" /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="選択" /></SelectTrigger>
                     <SelectContent>
                       {parts.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                     </SelectContent>
@@ -321,7 +328,7 @@ export default function App() {
                 <div className="col-span-2">
                   <label className="text-xs text-neutral-500">種目</label>
                   <Select value={form.liftId} onValueChange={(v)=> setForm({...form, liftId:v as LiftId})}>
-                    <SelectTrigger><SelectValue placeholder="選択" /></SelectTrigger>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="選択" /></SelectTrigger>
                     <SelectContent>
                       {lifts.filter(l=>l.part===form.part).map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
                     </SelectContent>
@@ -329,23 +336,23 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">重量(kg)</label>
-                  <Input inputMode="decimal" value={form.weight} onChange={e=>setForm({...form, weight:Number(e.target.value)})}/>
+                  <Input className="h-9" inputMode="decimal" value={form.weight} onChange={e=>setForm({...form, weight:Number(e.target.value)})}/>
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">回数</label>
-                  <Input inputMode="numeric" value={form.reps} onChange={e=>setForm({...form, reps:Number(e.target.value)})}/>
+                  <Input className="h-9" inputMode="numeric" value={form.reps} onChange={e=>setForm({...form, reps:Number(e.target.value)})}/>
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">セット数</label>
-                  <Input inputMode="numeric" value={form.sets} onChange={e=>setForm({...form, sets:Number(e.target.value)})}/>
+                  <Input className="h-9" inputMode="numeric" value={form.sets} onChange={e=>setForm({...form, sets:Number(e.target.value)})}/>
                 </div>
                 <div className="col-span-2 md:col-span-8">
                   <label className="text-xs text-neutral-500">メモ</label>
-                  <Textarea rows={2} value={form.note} onChange={e=>setForm({...form, note:e.target.value})}/>
+                  <Textarea className="min-h-[72px]" rows={2} value={form.note} onChange={e=>setForm({...form, note:e.target.value})}/>
                 </div>
                 <div className="col-span-2 md:col-span-8 flex items-center gap-2">
-                  <Button onClick={addEntry}><Plus className="w-4 h-4 mr-1"/>追加</Button>
-                  {lastDeleted && <Button variant="outline" onClick={undoDelete}><Undo2 className="w-4 h-4 mr-1"/>元に戻す</Button>}
+                  <Button className="inline-flex items-center gap-2" onClick={addEntry}><Plus className="w-4 h-4"/>追加</Button>
+                  {lastDeleted && <Button className="inline-flex items-center gap-2" variant="outline" onClick={undoDelete}><Undo2 className="w-4 h-4"/>元に戻す</Button>}
                 </div>
               </CardContent>
             </Card>
@@ -388,13 +395,13 @@ export default function App() {
                   <div className="xl:col-span-1 space-y-3">
                     <div>
                       <label className="text-xs text-neutral-500">日付</label>
-                      <Input type="date" value={eventForm.date} onChange={e=>setEventForm({...eventForm, date:e.target.value})}/>
+                      <Input className="h-9" type="date" value={eventForm.date} onChange={e=>setEventForm({...eventForm, date:e.target.value})}/>
                     </div>
                     <div>
                       <label className="text-xs text-neutral-500">イベント名</label>
-                      <Input placeholder="例: 県大会 予選" value={eventForm.title} onChange={e=>setEventForm({...eventForm, title:e.target.value})}/>
+                      <Input className="h-9" placeholder="例: 県大会 予選" value={eventForm.title} onChange={e=>setEventForm({...eventForm, title:e.target.value})}/>
                     </div>
-                    <Button className="w-full" onClick={()=>{
+                    <Button className="inline-flex items-center gap-2 w-full" onClick={()=>{
                       if (!eventForm.date || !eventForm.title) return;
                       setEvents(prev=>[...prev, { id:`${eventForm.date}-${Date.now()}`, ...eventForm }].sort((a,b)=>(a.date>b.date?1:-1)));
                       setSelectedDate(new Date(eventForm.date));
@@ -425,11 +432,12 @@ export default function App() {
                           const bg = isEvent ? "!bg-yellow-100" : "";
                           return `${weekend} ${ring} ${bg}`;
                         }}
+                        // 高さを変えないドット（global.css の .dot と連動）
                         tileContent={({ date, view }) => {
                           if (view !== "month") return null;
                           const iso = date.toISOString().slice(0,10);
                           const has = events.some(e => e.date === iso);
-                          return has ? <div className="mt-1 w-1.5 h-1.5 rounded-full bg-red-500 mx-auto" /> : null;
+                          return has ? <span className="dot block mx-auto" /> : null;
                         }}
                       />
                     </div>
@@ -464,7 +472,7 @@ export default function App() {
           <div className="absolute left-1/2 top-1/2 w-[92vw] max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-lg">使い方</h3>
-              <Button variant="outline" onClick={()=>setShowHelp(false)}>閉じる</Button>
+              <Button className="inline-flex items-center gap-2" variant="outline" onClick={()=>setShowHelp(false)}>閉じる</Button>
             </div>
             <div className="space-y-4 text-sm leading-7">
               <ul className="list-disc ml-5">
@@ -509,7 +517,8 @@ function UpcomingList({ events, setEvents }:{
                   <div className="font-medium">{e.title}</div>
                   <div className="text-xs text-neutral-500">{e.date}（あと {Math.max(0, days)} 日）</div>
                 </div>
-                <Button size="sm" variant="destructive" onClick={() => setEvents(events.filter(x => x.id !== e.id))}>
+                <Button className="inline-flex items-center gap-2" size="sm" variant="destructive"
+                  onClick={() => setEvents(events.filter(x => x.id !== e.id))}>
                   <Trash2 className="w-4 h-4" />
                 </Button>
               </div>
@@ -569,8 +578,8 @@ function PartsManager({ parts, setParts, lifts, setLifts }:{
       <CardContent className="p-4 space-y-4">
         <h3 className="font-semibold">部位の管理</h3>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
-          <Input placeholder="部位を追加（例: 体幹）" value={newPart} onChange={e=>setNewPart(e.target.value)} />
-          <Button className="w-full md:w-[120px]" onClick={()=>{
+          <Input className="h-9" placeholder="部位を追加（例: 体幹）" value={newPart} onChange={e=>setNewPart(e.target.value)} />
+          <Button className="inline-flex items-center gap-2 w-full md:w-[120px]" onClick={()=>{
             const p = newPart.trim(); if (!p) return;
             if (!parts.includes(p)) setParts([...parts, p]);
             setNewPart("");
@@ -580,7 +589,7 @@ function PartsManager({ parts, setParts, lifts, setLifts }:{
           {parts.map(p => (
             <div key={p} className="px-3 py-1 rounded-full border text-sm flex items-center gap-2">
               {p}
-              <Button size="icon" variant="ghost" title="削除" onClick={()=>{
+              <Button className="inline-flex items-center gap-2" size="icon" variant="ghost" title="削除" onClick={()=>{
                 const remain = parts.filter(x=>x!==p);
                 const fallback = remain[0] || "胸";
                 setParts(remain.length ? remain : ["胸"]);
@@ -612,12 +621,12 @@ function LiftsManager({ parts, lifts, setLifts }:{
         <h3 className="font-semibold">種目の管理（追加/削除/所属変更）</h3>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_120px] gap-2">
-          <Input placeholder="種目名（例: Pull-up）" value={newLiftName} onChange={e=>setNewLiftName(e.target.value)} />
+          <Input className="h-9" placeholder="種目名（例: Pull-up）" value={newLiftName} onChange={e=>setNewLiftName(e.target.value)} />
           <Select value={newLiftPart} onValueChange={(v)=>setNewLiftPart(v as Part)}>
-            <SelectTrigger><SelectValue placeholder="部位" /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder="部位" /></SelectTrigger>
             <SelectContent>{parts.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
           </Select>
-          <Button className="w-full" onClick={()=>{
+          <Button className="inline-flex items-center gap-2 w-full" onClick={()=>{
             const name = newLiftName.trim(); if (!name) return;
             if (lifts.some(l => l.id === name)) return;
             setLifts([...lifts, { id:name, name, part:newLiftPart }]);
@@ -631,21 +640,21 @@ function LiftsManager({ parts, lifts, setLifts }:{
             const t=lifts.find(l=>l.id===v);
             setEditLiftPart(t?.part || parts[0] || "胸");
           }}>
-            <SelectTrigger><SelectValue placeholder="種目を選択" /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder="種目を選択" /></SelectTrigger>
             <SelectContent>{lifts.map(l => <SelectItem key={l.id} value={l.id}>{l.name}（{l.part}）</SelectItem>)}</SelectContent>
           </Select>
 
           <Select value={editLiftPart} onValueChange={(v)=>setEditLiftPart(v as Part)}>
-            <SelectTrigger><SelectValue placeholder="部位" /></SelectTrigger>
+            <SelectTrigger className="h-9"><SelectValue placeholder="部位" /></SelectTrigger>
             <SelectContent>{parts.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
           </Select>
 
-          <Button className="w-full" onClick={()=>{
+          <Button className="inline-flex items-center gap-2 w-full" onClick={()=>{
             if (!editLiftId) return;
             setLifts(lifts.map(l => l.id===editLiftId ? { ...l, part:editLiftPart } : l));
           }}>部位を変更</Button>
 
-          <Button className="w-full" variant="destructive" onClick={()=>{
+          <Button className="inline-flex items-center gap-2 w-full" variant="destructive" onClick={()=>{
             if (!editLiftId) return;
             if (isDefaultSBD(editLiftId)) return;
             setLifts(lifts.filter(l => l.id!==editLiftId));
@@ -678,7 +687,7 @@ function LogTable({ entries, lifts, onDelete }:{
     <div className="w-full overflow-x-auto">
       <div className="flex items-center justify-between mb-2">
         <div className="text-sm text-neutral-600">{entries.length} 件</div>
-        <Button variant="destructive" size="sm" onClick={del} disabled={!selected.size}>
+        <Button className="inline-flex items-center gap-2" variant="destructive" size="sm" onClick={del} disabled={!selected.size}>
           <Trash2 className="w-4 h-4 mr-1"/>選択削除 ({selected.size})
         </Button>
       </div>
