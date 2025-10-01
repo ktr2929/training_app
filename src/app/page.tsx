@@ -6,13 +6,17 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Trash2, Plus, Undo2, BarChart2, Calendar, HelpCircle } from "lucide-react";
 import CalendarView from "react-calendar";
+
+// クリック感のある共通ボタン
+import { PressableButton as Button } from "@/components/ui/pressable-button";
+// 追加完了トースト
+import { useToast } from "@/components/ui/use-toast";
 
 /** ===== 型 ===== */
 type Part = string;
@@ -52,6 +56,8 @@ const isSBD = (id: string) => ["Squat","Bench","Deadlift"].includes(id);
 
 /** ===== 本体 ===== */
 export default function App() {
+  const { toast } = useToast();
+
   // マスタ & 記録
   const [parts, setParts] = useState<Part[]>([...DEFAULT_PARTS]);
   const [lifts, setLifts] = useState<Lift[]>([...DEFAULT_LIFTS]);
@@ -117,6 +123,13 @@ export default function App() {
     }));
     setEntries(prev => [...newOnes, ...prev].sort((a,b)=> (a.date < b.date ? 1 : -1)));
     setForm(f => ({ ...f, note: "" }));
+
+    // ✅ 追加時のトースト
+    toast({
+      title: "追加完了",
+      description: "トレーニングが追加されました！",
+      duration: 2000,
+    });
   };
 
   /** ---- 削除/Undo ---- */
@@ -347,7 +360,7 @@ export default function App() {
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart2 className="w-4 h-4" />
-                  <h3 className="font-semibold">SBD 1RM 推移（reps=1 実測／更新日のみ）</h3>
+                  <h3 className="font-semibold">SBDマックス値推移（reps=1 実測／更新日のみ）</h3>
                 </div>
                 <div className="w-full h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
@@ -421,7 +434,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* 右：選択日のトレ / イベント一覧 */}
+                  {/* 右：選択日のトレ / 今後のイベント */}
                   <div className="xl:col-span-1 space-y-4">
                     <SelectedDayWorkouts
                       dateISO={selectedDate.toISOString().slice(0,10)}
@@ -643,7 +656,7 @@ function LogTable({ entries, lifts, onDelete }:{
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const toggle = (id: string) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const del = () => { if (selected.size && confirm(`${selected.size}件削除しますか？`)) onDelete(Array.from(selected)); setSelected(new Set()); };
-  const nameOf = (id: LiftId) => lifts.find(l => l.id===id)?.name || id;
+  const nameOfLocal = (id: LiftId) => lifts.find(l => l.id===id)?.name || id;
 
   const groups = useMemo(() => {
     const m = new Map<string, SetEntry[]>();
@@ -678,14 +691,14 @@ function LogTable({ entries, lifts, onDelete }:{
                 <React.Fragment key={key}>
                   <tr className="bg-neutral-100">
                     <td colSpan={6} className="p-2 font-medium">
-                      {date} / {nameOf(liftId as LiftId)} <span className="text-xs text-neutral-500">({arr.length}セット)</span>
+                      {date} / {nameOfLocal(liftId as LiftId)} <span className="text-xs text-neutral-500">({arr.length}セット)</span>
                     </td>
                   </tr>
                   {arr.map((e, i) => (
                     <motion.tr key={e.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className={`border-b ${i%2===0 ? "bg-white" : "bg-neutral-50"}`}>
                       <td className="p-2"><input type="checkbox" checked={selected.has(e.id)} onChange={()=>toggle(e.id)} /></td>
                       <td className="p-2 whitespace-nowrap">{e.date}</td>
-                      <td className="p-2 whitespace-nowrap">{nameOf(e.liftId)}</td>
+                      <td className="p-2 whitespace-nowrap">{nameOfLocal(e.liftId)}</td>
                       <td className="p-2">{e.weight}</td>
                       <td className="p-2">{e.reps}</td>
                       <td className="p-2 max-w-[400px] truncate" title={e.note}>{e.note}</td>
