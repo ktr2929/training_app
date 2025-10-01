@@ -29,6 +29,10 @@ type SetEntry = {
 };
 type EventEntry = { id: string; date: string; title: string };
 
+// フィルタ用の型（any排除）
+type PartFilter = "All" | Part;
+type LiftFilter = "All" | LiftId;
+
 /** ===== 定数 ===== */
 const LS_PREFIX = "kintore-v3";
 const LS_ENTRIES = `${LS_PREFIX}:entries`;
@@ -66,8 +70,8 @@ export default function App() {
 
   // 記録フィルタ（独立）
   const [fDate, setFDate] = useState<string>("");
-  const [fPart, setFPart] = useState<Part | "All">("All");
-  const [fLift, setFLift] = useState<LiftId | "All">("All");
+  const [fPart, setFPart] = useState<PartFilter>("All");
+  const [fLift, setFLift] = useState<LiftFilter>("All");
 
   // カレンダー
   const [events, setEvents] = useState<EventEntry[]>([]);
@@ -139,7 +143,7 @@ export default function App() {
     } else if (!liftsOfCurrentPart.find(l => l.id === form.liftId)) {
       setForm(f => ({ ...f, liftId: liftsOfCurrentPart[0].id as LiftId }));
     }
-  }, [form.part, liftsOfCurrentPart]); // eslint-disable-line
+  }, [form.part, liftsOfCurrentPart]);
 
   /** ---- 直近大会 ---- */
   const today = todayISO();
@@ -226,7 +230,10 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">部位で絞り込み</label>
-                  <Select value={fPart} onValueChange={(v)=>{ setFPart(v as any); setFLift("All"); }}>
+                  <Select
+                    value={fPart}
+                    onValueChange={(v)=>{ setFPart(v === "All" ? "All" : (v as Part)); setFLift("All"); }}
+                  >
                     <SelectTrigger><SelectValue placeholder="すべて" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">すべて</SelectItem>
@@ -236,7 +243,10 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-xs text-neutral-500">種目で絞り込み</label>
-                  <Select value={fLift} onValueChange={(v)=> setFLift(v as any)}>
+                  <Select
+                    value={fLift}
+                    onValueChange={(v)=> setFLift(v === "All" ? "All" : (v as LiftId))}
+                  >
                     <SelectTrigger><SelectValue placeholder="すべて" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="All">すべて</SelectItem>
@@ -444,8 +454,8 @@ export default function App() {
             </div>
             <div className="space-y-4 text-sm leading-7">
               <ul className="list-disc ml-5">
-                <li>記録タブ：**日付/部位/種目**で絞り込み → その日のサマリー + 一覧。</li>
-                <li>統計タブ：SBDの1RM推移（reps=1 実測／更新日のみ）。</li>
+                <li>記録タブ：<strong>日付/部位/種目</strong>で絞り込み → その日のサマリー + 一覧。</li>
+                <li>統計タブ：SBDの1RM推移（reps=1 実測／更新のみ）。</li>
                 <li>カレンダータブ：イベント日を色面＆ドットで強調。右側に選択日のトレと今後のイベント。</li>
                 <li>設定タブ：部位/種目の追加・削除・所属変更。</li>
               </ul>
