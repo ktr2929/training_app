@@ -13,10 +13,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Trash2, Plus, Undo2, BarChart2, Calendar, HelpCircle } from "lucide-react";
 import CalendarView from "react-calendar";
 
-// クリック感のある共通ボタン
+// クリック感のある共通ボタン（shadcnのButtonではなくPressableButtonを使用）
 import { PressableButton as Button } from "@/components/ui/pressable-button";
-// 追加完了トースト
-import { useToast } from "@/components/ui/use-toast";
 
 /** ===== 型 ===== */
 type Part = string;
@@ -56,7 +54,12 @@ const isSBD = (id: string) => ["Squat","Bench","Deadlift"].includes(id);
 
 /** ===== 本体 ===== */
 export default function App() {
-  const { toast } = useToast();
+  // --- 自前トースト（useToastを使わず依存ゼロで実装） ---
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const showToast = (msg: string, ms = 2000) => {
+    setToastMsg(msg);
+    window.setTimeout(() => setToastMsg(null), ms);
+  };
 
   // マスタ & 記録
   const [parts, setParts] = useState<Part[]>([...DEFAULT_PARTS]);
@@ -125,11 +128,7 @@ export default function App() {
     setForm(f => ({ ...f, note: "" }));
 
     // ✅ 追加時のトースト
-    toast({
-      title: "追加完了",
-      description: "トレーニングが追加されました！",
-      duration: 2000,
-    });
+    showToast("追加されました！");
   };
 
   /** ---- 削除/Undo ---- */
@@ -143,6 +142,7 @@ export default function App() {
     if (!lastDeleted) return;
     setEntries(prev => [...lastDeleted, ...prev].sort((a,b)=> (a.date < b.date ? 1 : -1)));
     setLastDeleted(null);
+    showToast("削除を取り消しました");
   };
 
   /** ---- 記録用：部位→種目の候補 ---- */
@@ -399,6 +399,7 @@ export default function App() {
                       setEvents(prev=>[...prev, { id:`${eventForm.date}-${Date.now()}`, ...eventForm }].sort((a,b)=>(a.date>b.date?1:-1)));
                       setSelectedDate(new Date(eventForm.date));
                       setEventForm({ date:"", title:"" });
+                      showToast("イベントを追加しました");
                     }}>追加</Button>
                   </div>
 
@@ -474,6 +475,15 @@ export default function App() {
               </ul>
               <p className="text-neutral-600">データはローカルストレージ保存です。</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- 自前トーストの描画 --- */}
+      {toastMsg && (
+        <div className="fixed top-4 right-4 z-[60]">
+          <div className="rounded-md bg-neutral-900 text-white text-sm px-4 py-2 shadow-lg">
+            {toastMsg}
           </div>
         </div>
       )}
