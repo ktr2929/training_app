@@ -1,12 +1,8 @@
 import "./globals.css";
 import Script from "next/script";
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font"; // ← ここを修正
+import { GeistSans, GeistMono } from "geist/font"; // ← 呼び出さない
 import AdBanner from "@/components/ui/AdBanner";
-
-// globals.css の CSS 変数名に合わせて variable を設定
-const geistSans = GeistSans({ subsets: ["latin"], variable: "--font-geist-sans" });
-const geistMono = GeistMono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: "きんとれログ",
@@ -26,12 +22,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           strategy="afterInteractive"
         />
       </head>
-      {/* Tailwind の font-sans を Geist に差し替え、等幅は GeistMono */}
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
-        {/* ページ本体（フッター広告ぶんの余白は AdBanner 側で確保） */}
+      {/* globals.css の CSS 変数名に合わせて: --font-geist-sans / --font-geist-mono */}
+      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
+        {/* 本体（フッター広告ぶんの余白は AdBanner 側の最小高さで吸収） */}
         <div className="min-h-[calc(100vh-60px)]">{children}</div>
 
-        {/* フッター広告（下部固定ではなくコンテンツ直下） */}
+        {/* フッター広告 */}
         <AdBanner slotId="5258884582" className="min-h-[60px]" />
       </body>
     </html>
