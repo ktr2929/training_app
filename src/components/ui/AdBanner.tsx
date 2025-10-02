@@ -2,41 +2,41 @@
 
 import { useEffect, useRef } from "react";
 
+// Google AdSense のグローバル配列を型で拡張
 declare global {
   interface Window {
-    adsbygoogle?: unknown[];
+    adsbygoogle: unknown[];
   }
 }
 
+/**
+ * 画面下部に出すレスポンシブ広告バナー
+ * - layout.tsx で adsbygoogle の Script を読み込んでいる前提
+ */
 export default function AdBanner() {
-  const adRef = useRef<HTMLElement | null>(null);
+  // <ins> 要素は HTMLModElement で表現される
+  const insRef = useRef<HTMLModElement | null>(null);
 
   useEffect(() => {
-    // 同じ <ins> に二重で push しないための防御
-    const el = adRef.current as any;
-    if (!el) return;
-    // 既にレンダ済みならスキップ
-    if (el.getAttribute("data-adsbygoogle-status") === "done") return;
-
+    if (!insRef.current) return;
     try {
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch (e) {
-      // devのStrictMode等で二重実行時に出ることがあるので握りつぶす
-      // console.warn("Adsense render error", e);
+      // 配列を初期化して push
+      window.adsbygoogle = window.adsbygoogle || [];
+      window.adsbygoogle.push({});
+    } catch {
+      // 広告ブロッカー等で例外が出てもアプリを止めない
     }
   }, []);
 
   return (
-    <div className="w-full flex justify-center py-6 border-t bg-white">
-      <ins
-        ref={adRef as any}
-        className="adsbygoogle"
-        style={{ display: "block" }}
-        data-ad-client="ca-pub-8011536479332336"
-        data-ad-slot="5258884582"
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      />
-    </div>
+    <ins
+      className="adsbygoogle"
+      style={{ display: "block", width: "100%" }}
+      data-ad-client="ca-pub-8011536479332336"
+      data-ad-slot="5258884582"
+      data-ad-format="auto"
+      data-full-width-responsive="true"
+      ref={insRef}
+    />
   );
 }
