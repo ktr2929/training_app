@@ -1,45 +1,36 @@
 import "./globals.css";
 import Script from "next/script";
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import AdBanner from "@/components/ui/AdBanner";  // ✅ パス修正（ui/AdBanner）
+import { Geist, Geist_Mono } from "geist/font";        // ← 修正
+import AdBanner from "@/components/ui/AdBanner";        // ← 既にOK
+
+// フォントのCSS変数名を globals.css と合わせる
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
   title: "きんとれログ",
-  description: "トレーニング記録・統計・カレンダーをまとめるアプリ",
+  description: "シンプルな筋トレ記録アプリ",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ja" className={GeistSans.className}>
+    <html lang="ja">
       <head>
-        {/* ✅ Google AdSense のスクリプト */}
+        {/* AdSense ローダー（site-wide） */}
         <Script
-          id="adsense-init"
+          id="adsbygoogle-init"
           async
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8011536479332336"
           crossOrigin="anonymous"
           strategy="afterInteractive"
         />
       </head>
-      <body className="min-h-screen flex flex-col">
-        <main className="flex-1">{children}</main>
-
-        {/* ✅ サイト全体フッター広告 */}
-        <footer className="border-t bg-neutral-50">
-          <div className="max-w-6xl mx-auto px-3 py-2 min-h-[60px] flex items-center justify-center">
-            <AdBanner />
-          </div>
-          <div className="text-center text-xs text-neutral-500 py-2">
-            <a href="/privacy" className="hover:underline">
-              プライバシーポリシー
-            </a>
-          </div>
-        </footer>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        {/* ページ本体 */}
+        <div className="min-h-[calc(100vh-60px)]">{children}</div>
+        {/* フッター広告（枠を確保） */}
+        <AdBanner slotId="5258884582" className="min-h-[60px]" />
       </body>
     </html>
   );
