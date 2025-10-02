@@ -1,6 +1,7 @@
 import "./globals.css";
 import Script from "next/script";
-import AdBanner from "@/components/AdBanner";
+import AdBanner from "@/components/ui/AdBanner";
+
 
 export const metadata = {
   title: "きんとれログ",
