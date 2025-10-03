@@ -414,32 +414,35 @@ export default function App() {
                   <div className="xl:col-span-1 flex justify-center">
                     <div className="rounded-xl border p-3 bg-white w-full max-w-[420px]">
                       <CalendarView
-                        value={selectedDate}
-                        onChange={(v)=> setSelectedDate(v as Date)}
-                        locale="ja-JP"
-                        showNeighboringMonth={false}
-                        next2Label={null}
-                        prev2Label={null}
-                        formatDay={(_, date) => `${date.getDate()}`}
-                        tileClassName={({ date, view }) => {
-                          if (view !== "month") return "";
-                          const iso = date.toISOString().slice(0,10);
-                          const isToday = iso === today;
-                          const isEvent = events.some(e => e.date === iso);
-                          const w = date.getDay();
-                          const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
-                          const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
-                          const bg = isEvent ? "!bg-yellow-100" : "";
-                          return `${weekend} ${ring} ${bg}`;
-                        }}
-                        // 高さを変えないドット（global.css の .dot と連動）
-                        tileContent={({ date, view }) => {
-                          if (view !== "month") return null;
-                          const iso = date.toISOString().slice(0,10);
-                          const has = events.some(e => e.date === iso);
-                          return has ? <span className="dot block mx-auto" /> : null;
-                        }}
-                      />
+                      value={selectedDate}
+  onChange={(v) => setSelectedDate(v as Date)}
+  locale="ja-JP"
+  calendarType="iso8601"              // ★ 追加：月曜はじまりに統一
+  showNeighboringMonth={false}
+  next2Label={null}
+  prev2Label={null}
+  // ヘッダーの曜日表記を明示（calendarTypeに追従して並び替えは内部で行われます）
+  formatShortWeekday={(_, date) => ['日','月','火','水','木','金','土'][date.getDay()]}
+  formatDay={(_, date) => `${date.getDate()}`}
+  tileClassName={({ date, view }) => {
+    if (view !== "month") return "";
+    const iso = date.toISOString().slice(0, 10);
+    const isToday = iso === today;
+    const isEvent = events.some(e => e.date === iso);
+    const w = date.getDay();
+    const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
+    const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
+    const bg = isEvent ? "!bg-yellow-100" : "";
+    return `${weekend} ${ring} ${bg}`;
+  }}
+  tileContent={({ date, view }) => {
+    if (view !== "month") return null;
+    const iso = date.toISOString().slice(0, 10);
+    const has = events.some(e => e.date === iso);
+    return has ? <span className="dot block mx-auto" /> : null;
+  }}
+/>
+
                     </div>
                   </div>
 
