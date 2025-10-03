@@ -1,7 +1,7 @@
 import "./globals.css";
 import Script from "next/script";
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font"; // ← 呼び出さない
+import { GeistSans, GeistMono } from "geist/font"; 
 import AdBanner from "@/components/ui/AdBanner";
 
 export const metadata: Metadata = {
@@ -29,6 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* フッター広告 */}
         <AdBanner slotId="5258884582" className="min-h-[60px]" />
+
+        {/* フッター説明文 */}
+        <footer className="w-full text-center py-4 text-sm text-muted-foreground">
+          きんとれログは、スクワット・ベンチプレス・デッドリフトを中心に
+          筋トレを記録・管理できる無料アプリです。
+        </footer>
       </body>
     </html>
   );
