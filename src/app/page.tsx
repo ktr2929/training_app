@@ -429,7 +429,6 @@ export default function App() {
       value={selectedDate}
       onChange={(v) => setSelectedDate(v as Date)}
       locale="ja-JP"
-      calendarType="US"              // ← 週の始まりを日曜日に固定（日本の慣習）
       showNeighboringMonth={false}
       next2Label={null}
       prev2Label={null}
