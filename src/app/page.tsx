@@ -12,6 +12,13 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Trash2, Plus, Undo2, BarChart2, Calendar, HelpCircle } from "lucide-react";
 import CalendarView from "react-calendar";
+const localDateKey = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`; // ローカル基準の日付
+};
+
 
 // クリック感のある共通ボタン（shadcnのButtonではなくPressableButtonを使用）
 import { PressableButton as Button } from "@/components/ui/pressable-button";
@@ -426,7 +433,8 @@ export default function App() {
   formatDay={(_, date) => `${date.getDate()}`}
   tileClassName={({ date, view }) => {
     if (view !== "month") return "";
-    const iso = date.toISOString().slice(0, 10);
+    const iso = localDateKey(date); 
+    const todayIso = localDateKey(new Date());
     const isToday = iso === today;
     const isEvent = events.some(e => e.date === iso);
     const w = date.getDay();
@@ -437,7 +445,7 @@ export default function App() {
   }}
   tileContent={({ date, view }) => {
     if (view !== "month") return null;
-    const iso = date.toISOString().slice(0, 10);
+    const iso = localDateKey(date); 
     const has = events.some(e => e.date === iso);
     return has ? <span className="dot block mx-auto" /> : null;
   }}
@@ -449,7 +457,7 @@ export default function App() {
                   {/* 右：選択日のトレ / 今後のイベント */}
                   <div className="xl:col-span-1 space-y-4">
                     <SelectedDayWorkouts
-                      dateISO={selectedDate.toISOString().slice(0,10)}
+                      dateISO={localDateKey(selectedDate)} 
                       entries={entries}
                       lifts={lifts}
                     />
