@@ -12,12 +12,17 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Trash2, Plus, Undo2, BarChart2, Calendar, HelpCircle } from "lucide-react";
 import CalendarView from "react-calendar";
-const localDateKey = (d: Date) => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`; // ローカル基準の日付
-};
+// --- JST helpers ---
+const TZ = "Asia/Tokyo";
+
+// YYYY-MM-DD を JST で安定化
+const localDateKey = (d: Date) =>
+  d.toLocaleString("sv-SE", { timeZone: TZ, hour12: false }).slice(0, 10);
+
+// JST で曜日を取得（0=日 ... 6=土）
+const getJstDay = (d: Date) =>
+  new Date(d.toLocaleString("en-US", { timeZone: TZ })).getDay();
+
 
 
 // クリック感のある共通ボタン（shadcnのButtonではなくPressableButtonを使用）
@@ -167,7 +172,7 @@ export default function App() {
   }, [form.part, form.liftId, liftsOfCurrentPart]);
 
   /** ---- 直近大会 ---- */
-  const today = todayISO();
+  const today = localDateKey(new Date());
   const upcoming = useMemo(
     () => events.filter(e => e.date >= today).sort((a,b)=> (a.date < b.date ? -1 : 1))[0],
     [events, today]
@@ -418,41 +423,50 @@ export default function App() {
                   </div>
 
                   {/* 中央：読みやすいカレンダー */}
-                  <div className="xl:col-span-1 flex justify-center">
-                    <div className="rounded-xl border p-3 bg-white w-full max-w-[420px]">
-                      <CalendarView
-                      value={selectedDate}
-  onChange={(v) => setSelectedDate(v as Date)}
-  locale="ja-JP"
-  calendarType="iso8601"              // ★ 追加：月曜はじまりに統一
-  showNeighboringMonth={false}
-  next2Label={null}
-  prev2Label={null}
-  // ヘッダーの曜日表記を明示（calendarTypeに追従して並び替えは内部で行われます）
-  formatShortWeekday={(_, date) => ['日','月','火','水','木','金','土'][date.getDay()]}
-  formatDay={(_, date) => `${date.getDate()}`}
-  tileClassName={({ date, view }) => {
-    if (view !== "month") return "";
-    const iso = localDateKey(date); 
-    const todayIso = localDateKey(new Date());
-    const isToday = iso === today;
-    const isEvent = events.some(e => e.date === iso);
-    const w = date.getDay();
-    const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
-    const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
-    const bg = isEvent ? "!bg-yellow-100" : "";
-    return `${weekend} ${ring} ${bg}`;
-  }}
-  tileContent={({ date, view }) => {
-    if (view !== "month") return null;
-    const iso = localDateKey(date); 
-    const has = events.some(e => e.date === iso);
-    return has ? <span className="dot block mx-auto" /> : null;
-  }}
-/>
+<div className="xl:col-span-1 flex justify-center">
+  <div className="rounded-xl border p-3 bg-white w-full max-w-[420px]">
+    <CalendarView
+      value={selectedDate}
+      onChange={(v) => setSelectedDate(v as Date)}
+      locale="ja-JP"
+      calendarType="US"              // ← 週の始まりを日曜日に固定（日本の慣習）
+      showNeighboringMonth={false}
+      next2Label={null}
+      prev2Label={null}
 
-                    </div>
-                  </div>
+      // 曜日ヘッダ（JSTで固定）
+      formatShortWeekday={(_, date) =>
+        ["日", "月", "火", "水", "木", "金", "土"][getJstDay(date)]
+      }
+
+      // 日付タイルの数字（JSTで安定化）
+      formatDay={(_, date) =>
+        new Date(date.toLocaleString("en-US", { timeZone: TZ })).getDate().toString()
+      }
+
+      tileClassName={({ date, view }) => {
+        if (view !== "month") return "";
+        const iso = localDateKey(date);                      // ← JST
+        const isToday = iso === today;
+        const isEvent = events.some((e) => e.date === iso);  // ← JST
+        const w = getJstDay(date);                           // ← JST
+        const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
+        const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
+        const bg = isEvent ? "!bg-yellow-100" : "";
+        return `${weekend} ${ring} ${bg}`;
+      }}
+
+      // 高さを変えないドット（JSTで判定）
+      tileContent={({ date, view }) => {
+        if (view !== "month") return null;
+        const iso = localDateKey(date);                      // ← JST
+        const has = events.some((e) => e.date === iso);      // ← JST
+        return has ? <span className="dot block mx-auto" /> : null;
+      }}
+    />
+  </div>
+</div>
+
 
                   {/* 右：選択日のトレ / 今後のイベント */}
                   <div className="xl:col-span-1 space-y-4">
