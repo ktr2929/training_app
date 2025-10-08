@@ -38,7 +38,7 @@ import { PressableButton as Button } from "@/components/ui/pressable-button";
 const TZ = "Asia/Tokyo";
 // YYYY-MM-DD を JST で安定生成
 const dateKeyJST = (d: Date) =>
-  new Date(d.toLocaleString("en-US", { timeZone: TZ })).toISOString().slice(0, 10);
+  d.toLocaleString("sv-SE", { timeZone: TZ, hour12: false }).slice(0, 10); // "YYYY-MM-DD"
 // 曜日（0=Sun..6=Sat）をJSTで
 const dayJST = (d: Date) =>
   new Date(d.toLocaleString("en-US", { timeZone: TZ })).getDay();
@@ -680,41 +680,38 @@ export default function App() {
                   <div className="xl:col-span-1 flex justify-center">
                     <div className="rounded-xl border p-3 bg-white w-full max-w-[420px]">
                       <CalendarView
-                        value={selectedDate}
-                        onChange={(v) => setSelectedDate(v as Date)}
-                        locale="ja-JP"
-                        showNeighboringMonth={false}
-                        next2Label={null}
-                        prev2Label={null}
-                        formatShortWeekday={(_, d) =>
-                          ["日", "月", "火", "水", "木", "金", "土"][dayJST(d)]
-                        }
-                        formatDay={(_, d) =>
-                          new Date(
-                            d.toLocaleString("en-US", { timeZone: TZ })
-                          )
-                            .getDate()
-                            .toString()
-                        }
-                        tileClassName={({ date, view }) => {
-                          if (view !== "month") return "";
-                          const iso = dateKeyJST(date);
-                          const isToday = iso === todayISO();
-                          const isEvent = events.some((e) => e.date === iso);
-                          const w = dayJST(date);
-                          const weekend =
-                            w === 0
-                              ? "text-red-500"
-                              : w === 6
-                              ? "text-blue-600"
-                              : "";
-                          const ring = isToday
-                            ? "ring-2 ring-amber-500 rounded-md"
-                            : "";
-                          const bg = isEvent ? "!bg-yellow-100" : "";
-                          return `${weekend} ${ring} ${bg}`;
-                        }}
-                      />
+  value={selectedDate}
+  onChange={(v) => setSelectedDate(v as Date)}
+  locale="ja-JP"
+  calendarType="iso8601"         // 月曜始まり（USにすると日曜始まり）
+  showNeighboringMonth={false}
+  next2Label={null}
+  prev2Label={null}
+
+  // 曜日ラベルをJSTで
+  formatShortWeekday={(_, date) =>
+    ["日", "月", "火", "水", "木", "金", "土"][dayJST(date)]
+  }
+
+  // 日付の数字をJSTで
+  formatDay={(_, date) =>
+    new Date(date.toLocaleString("en-US", { timeZone: TZ })).getDate().toString()
+  }
+
+  // 強調表示もJST基準
+  tileClassName={({ date, view }) => {
+    if (view !== "month") return "";
+    const iso = dateKeyJST(date);               // JSTのYYYY-MM-DD
+    const isToday = iso === dateKeyJST(new Date());
+    const isEvent = events.some((e) => e.date === iso);
+    const w = dayJST(date);
+    const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
+    const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
+    const bg = isEvent ? "!bg-yellow-100" : "";
+    return `${weekend} ${ring} ${bg}`;
+  }}
+/>
+
                     </div>
                   </div>
 
