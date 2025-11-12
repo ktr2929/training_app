@@ -272,6 +272,42 @@ const sbdData = useMemo(() => {
   }
   return out;
 }, [entries]);
+// sbdData（更新日のみ, 一部nullあり）→ 前回値で埋めて線を切らさない
+const sbdDataCF = useMemo(() => {
+  let prevSq: number | null = null;
+  let prevBp: number | null = null;
+  let prevDl: number | null = null;
+
+  return sbdData.map(r => {
+    const row = {
+      date: r.date,
+      Squat: r.Squat ?? prevSq,
+      Bench: r.Bench ?? prevBp,
+      Deadlift: r.Deadlift ?? prevDl,
+    };
+    if (row.Squat != null) prevSq = row.Squat;
+    if (row.Bench != null) prevBp = row.Bench;
+    if (row.Deadlift != null) prevDl = row.Deadlift;
+    return row;
+  });
+}, [sbdData]);
+
+// Y軸上限をきれいに丸める（見やすさ用）
+const yMax = useMemo(() => {
+  const max = Math.max(
+    0,
+    ...sbdDataCF.flatMap(d => [d.Squat ?? 0, d.Bench ?? 0, d.Deadlift ?? 0])
+  );
+  return Math.ceil(max * 1.05 / 10) * 10;
+}, [sbdDataCF]);
+
+// KPI（最新行の合計）
+const kpiTotal = useMemo(() => {
+  const last = sbdDataCF.at(-1);
+  if (!last) return 0;
+  return (last.Squat ?? 0) + (last.Bench ?? 0) + (last.Deadlift ?? 0);
+}, [sbdDataCF]);
+
 
 
   /* ===== stats helpers: forward-fill daily series ===== */
@@ -678,7 +714,7 @@ const sbdData = useMemo(() => {
       <div className="w-full h-[340px]">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={sbdData} // ← carry-forwardせず、更新日だけ
+            data={sbdDataCF} // ← carry-forwardせず、更新日だけ
             margin={{ top: 8, right: 16, left: 12, bottom: 8 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
