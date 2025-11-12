@@ -229,6 +229,51 @@ export default function App() {
     });
   }, [entries, lifts, fDate, fPart, fLift]);
 
+  // 更新日だけのSBDデータ（点を線で結ぶ用）
+const sbdData = useMemo(() => {
+  type K = "Squat" | "Bench" | "Deadlift";
+
+  // 日ごとの1rep最大
+  const dayMax: Record<K, Map<string, number>> = {
+    Squat: new Map(),
+    Bench: new Map(),
+    Deadlift: new Map(),
+  };
+  for (const e of entries) {
+    if (!isSBD(e.liftId) || e.reps !== 1) continue;
+    const k = e.liftId as K;
+    const d = e.date;
+    dayMax[k].set(d, Math.max(dayMax[k].get(d) ?? -Infinity, e.weight));
+  }
+
+  // その日で“いずれかが更新された日”だけを抽出
+  const allDates = new Set<string>([
+    ...dayMax.Squat.keys(),
+    ...dayMax.Bench.keys(),
+    ...dayMax.Deadlift.keys(),
+  ]);
+  const datesSorted = [...allDates].sort((a, b) => (a < b ? -1 : 1));
+
+  const out: Array<{ date: string; Squat: number | null; Bench: number | null; Deadlift: number | null }> = [];
+  const best: Record<K, number> = { Squat: -Infinity, Bench: -Infinity, Deadlift: -Infinity };
+
+  for (const d of datesSorted) {
+    let changed = false;
+    const row = { date: d, Squat: null as number | null, Bench: null as number | null, Deadlift: null as number | null };
+    (["Squat", "Bench", "Deadlift"] as K[]).forEach((k) => {
+      const v = dayMax[k].get(d);
+      if (v != null && v > best[k]) {
+        best[k] = v;
+        row[k] = v;
+        changed = true;
+      }
+    });
+    if (changed) out.push(row);
+  }
+  return out;
+}, [entries]);
+
+
   /* ===== stats helpers: forward-fill daily series ===== */
   function daysBetweenJST(startISO: string, endISO: string): string[] {
     const out: string[] = [];
