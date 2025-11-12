@@ -598,74 +598,98 @@ export default function App() {
           </TabsContent>
 
           {/* ===== 統計 ===== */}
-          <TabsContent value="stats" className="space-y-4">
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <BarChart2 className="w-4 h-4" />
-                  <h3 className="font-semibold">
-                    SBDマックス値推移（reps=1 実測／前回値持ち越し）
-                  </h3>
-                </div>
+<TabsContent value="stats" className="space-y-4">
+  <Card className="shadow-sm">
+    <CardContent className="p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <BarChart2 className="w-4 h-4" />
+        <h3 className="font-semibold">
+          SBDマックス値推移（reps=1 実測／更新日のみ・点を線で結ぶ）
+        </h3>
+      </div>
 
-                {/* KPI：現在のSBD合計マックス */}
-                <div className="rounded-lg border p-3 mb-3 bg-white">
-                  <div className="text-xs text-neutral-500">現在のSBD合計マックス</div>
-                  <div className="text-3xl font-extrabold tracking-tight">
-                    {Math.round(sbdMaxNow)}
-                  </div>
-                  <div className="text-xs text-neutral-500">
-                    （ベストSQ＋ベストBP＋ベストDLの合計）
-                  </div>
-                </div>
+      {/* KPI: 現在のSBD合計マックス（グラフは描かない） */}
+      <div className="mb-2">
+        <div className="text-neutral-500 text-xs">現在のSBD合計マックス</div>
+        <div className="text-5xl font-extrabold leading-tight">
+          {
+            // sbdDataは{date,Squat,Bench,Deadlift}の更新日だけの配列
+            (() => {
+              if (!sbdData.length) return 0;
+              const last = sbdData[sbdData.length - 1];
+              const sq = last.Squat ?? 0;
+              const bp = last.Bench ?? 0;
+              const dl = last.Deadlift ?? 0;
+              return sq + bp + dl;
+            })()
+          }
+        </div>
+        <div className="text-neutral-500 text-xs">
+          （ベストSQ + ベストBP + ベストDL の合計）
+        </div>
+      </div>
 
-                <div className="w-full h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sbdSeries}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="Bench"
-                        name="Bench"
-                        stroke="#ef4444"
-                        dot={false}
-                        connectNulls
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="Deadlift"
-                        name="Deadlift"
-                        stroke="#10b981"
-                        dot={false}
-                        connectNulls
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="Squat"
-                        name="Squat"
-                        stroke="#2563eb"
-                        dot={false}
-                        connectNulls
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="Total"
-                        name="SBD Total"
-                        stroke="#111827"
-                        strokeWidth={2}
-                        dot={false}
-                        connectNulls
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+      {/* 折れ線（更新日の点どうしを直線で結ぶ） */}
+      <div className="w-full h-[340px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={sbdData} // ← carry-forwardせず、更新日だけ
+            margin={{ top: 8, right: 16, left: 12, bottom: 8 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis
+              dataKey="date"
+              interval="preserveStartEnd"  // 端は残して適度に間引き
+              minTickGap={40}              // 近い目盛りは自動で削減
+              tickFormatter={(d) => d.slice(0, 7)} // "YYYY-MM"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+            />
+            <YAxis
+              allowDecimals={false}
+              domain={[0, 'dataMax + 10']}
+              tick={{ fontSize: 12 }}
+              width={40}
+            />
+            <Tooltip
+              formatter={(v: any, name) => [`${v} kg`, name]}
+              labelFormatter={(x) => `日付: ${x}`}
+            />
+            <Legend verticalAlign="top" height={24} />
+
+            {/* 3種目だけ描画（合計は描かない） */}
+            <Line
+              type="linear"
+              dataKey="Squat"
+              name="Squat"
+              stroke="#2563eb"
+              strokeWidth={2.5}
+              dot={{ r: 3 }}
+              // connectNulls は使わない：更新日だけの配列なので自然に点同士が結ばれる
+            />
+            <Line
+              type="linear"
+              dataKey="Bench"
+              name="Bench"
+              stroke="#ef4444"
+              strokeWidth={2.5}
+              dot={{ r: 3 }}
+            />
+            <Line
+              type="linear"
+              dataKey="Deadlift"
+              name="Deadlift"
+              stroke="#10b981"
+              strokeWidth={2.5}
+              dot={{ r: 3 }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </CardContent>
+  </Card>
+</TabsContent>
+
 
           {/* ===== カレンダー ===== */}
           <TabsContent value="calendar" className="space-y-4">
