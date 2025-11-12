@@ -229,55 +229,82 @@ export default function App() {
     });
   }, [entries, lifts, fDate, fPart, fLift]);
 
-  /* ===== stats: SBD line with unique dates & update-only points ===== */
-  const sbdData = useMemo(() => {
-    type K = "Squat" | "Bench" | "Deadlift";
-    const dayMax: Record<K, Map<string, number>> = {
+  /* ===== stats helpers: forward-fill daily series ===== */
+  function daysBetweenJST(startISO: string, endISO: string): string[] {
+    const out: string[] = [];
+    const d0 = new Date(`${startISO}T00:00:00+09:00`);
+    const d1 = new Date(`${endISO}T00:00:00+09:00`);
+    for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const da = String(d.getDate()).padStart(2, "0");
+      out.push(`${y}-${m}-${da}`);
+    }
+    return out;
+  }
+
+  type SbdRow = {
+    date: string;
+    Squat: number | null;
+    Bench: number | null;
+    Deadlift: number | null;
+    Total: number | null;
+  };
+
+  function buildSbdSeries(allEntries: SetEntry[]): SbdRow[] {
+    // reps=1 のSBDのみ抽出し、日付×種目のその日最大を作る
+    const dayMax: Record<"Squat" | "Bench" | "Deadlift", Map<string, number>> = {
       Squat: new Map(),
       Bench: new Map(),
       Deadlift: new Map(),
     };
-    for (const e of entries) {
-      if (!isSBD(e.liftId) || e.reps !== 1) continue;
-      const k = e.liftId as K;
+    const sbdEntries = allEntries.filter((e) => isSBD(e.liftId) && e.reps === 1);
+    if (sbdEntries.length === 0) return [];
+
+    let minDate = sbdEntries[0].date;
+    let maxDate = sbdEntries[0].date;
+
+    for (const e of sbdEntries) {
+      const k = e.liftId as "Squat" | "Bench" | "Deadlift";
       const d = e.date;
       dayMax[k].set(d, Math.max(dayMax[k].get(d) ?? -Infinity, e.weight));
+      if (d < minDate) minDate = d;
+      if (d > maxDate) maxDate = d;
     }
-    const allDates = new Set<string>([
-      ...dayMax.Squat.keys(),
-      ...dayMax.Bench.keys(),
-      ...dayMax.Deadlift.keys(),
-    ]);
-    const datesSorted = [...allDates].sort((a, b) => (a < b ? -1 : 1));
 
-    const out: Array<{
-      date: string;
-      Squat: number | null;
-      Bench: number | null;
-      Deadlift: number | null;
-    }> = [];
-    const best: Record<K, number> = {
-      Squat: -Infinity,
-      Bench: -Infinity,
-      Deadlift: -Infinity,
-    };
+    const days = daysBetweenJST(minDate, maxDate);
 
-    for (const d of datesSorted) {
-      let changed = false;
-      const row: { date: string; Squat: number | null; Bench: number | null; Deadlift: number | null } =
-        { date: d, Squat: null, Bench: null, Deadlift: null };
-      (["Squat", "Bench", "Deadlift"] as K[]).forEach((k) => {
-        const v = dayMax[k].get(d);
-        if (v != null && v > best[k]) {
-          best[k] = v;
-          row[k] = v;
-          changed = true;
-        }
-      });
-      if (changed) out.push(row);
-    }
-    return out;
-  }, [entries]);
+    // 前回値を持ち越し（初出現前は null）
+    let last: Partial<Record<"Squat" | "Bench" | "Deadlift", number>> = {};
+    const series: SbdRow[] = days.map((date) => {
+      const squat = dayMax.Squat.get(date) ?? (last.Squat ?? null);
+      const bench = dayMax.Bench.get(date) ?? (last.Bench ?? null);
+      const deadlift = dayMax.Deadlift.get(date) ?? (last.Deadlift ?? null);
+
+      if (dayMax.Squat.has(date)) last.Squat = dayMax.Squat.get(date)!;
+      if (dayMax.Bench.has(date)) last.Bench = dayMax.Bench.get(date)!;
+      if (dayMax.Deadlift.has(date)) last.Deadlift = dayMax.Deadlift.get(date)!;
+
+      const total =
+        squat != null && bench != null && deadlift != null
+          ? squat + bench + deadlift
+          : null;
+
+      return { date, Squat: squat, Bench: bench, Deadlift: deadlift, Total: total };
+    });
+
+    return series;
+  }
+
+  function currentSbdTotalMax(series: SbdRow[]): number {
+    let best = 0;
+    for (const r of series) if (r.Total != null) best = Math.max(best, r.Total);
+    return best;
+  }
+
+  /* ===== stats: SBD forward-filled line & total ===== */
+  const sbdSeries = useMemo(() => buildSbdSeries(entries), [entries]);
+  const sbdMaxNow = useMemo(() => currentSbdTotalMax(sbdSeries), [sbdSeries]);
 
   /* ====== day summary for selected date in filter (optional card) ====== */
   const daySummary = useMemo(() => {
@@ -290,10 +317,7 @@ export default function App() {
       map.get(e.liftId)!.push(e);
     }
     return Array.from(map.entries()).map(([liftId, arr]) => {
-      const volume = arr.reduce(
-        (s, x) => s + x.weight * x.reps * x.sets,
-        0
-      );
+      const volume = arr.reduce((s, x) => s + x.weight * x.reps * x.sets, 0);
       return { liftId, arr, volume };
     });
   }, [entries, fDate]);
@@ -580,12 +604,24 @@ export default function App() {
                 <div className="flex items-center gap-2 mb-2">
                   <BarChart2 className="w-4 h-4" />
                   <h3 className="font-semibold">
-                    SBDマックス値推移（reps=1 実測／更新日のみ）
+                    SBDマックス値推移（reps=1 実測／前回値持ち越し）
                   </h3>
                 </div>
+
+                {/* KPI：現在のSBD合計マックス */}
+                <div className="rounded-lg border p-3 mb-3 bg-white">
+                  <div className="text-xs text-neutral-500">現在のSBD合計マックス</div>
+                  <div className="text-3xl font-extrabold tracking-tight">
+                    {Math.round(sbdMaxNow)}
+                  </div>
+                  <div className="text-xs text-neutral-500">
+                    （ベストSQ＋ベストBP＋ベストDLの合計）
+                  </div>
+                </div>
+
                 <div className="w-full h-[320px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={sbdData}>
+                    <LineChart data={sbdSeries}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
@@ -593,24 +629,36 @@ export default function App() {
                       <Legend />
                       <Line
                         type="monotone"
-                        dataKey="Squat"
-                        name="Squat"
-                        stroke="#2563eb"
-                        dot
-                      />
-                      <Line
-                        type="monotone"
                         dataKey="Bench"
                         name="Bench"
                         stroke="#ef4444"
-                        dot
+                        dot={false}
+                        connectNulls
                       />
                       <Line
                         type="monotone"
                         dataKey="Deadlift"
                         name="Deadlift"
                         stroke="#10b981"
-                        dot
+                        dot={false}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="Squat"
+                        name="Squat"
+                        stroke="#2563eb"
+                        dot={false}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="Total"
+                        name="SBD Total"
+                        stroke="#111827"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
                       />
                     </LineChart>
                   </ResponsiveContainer>
@@ -680,38 +728,37 @@ export default function App() {
                   <div className="xl:col-span-1 flex justify-center">
                     <div className="rounded-xl border p-3 bg-white w-full max-w-[420px]">
                       <CalendarView
-  value={selectedDate}
-  onChange={(v) => setSelectedDate(v as Date)}
-  locale="ja-JP"
-  calendarType="iso8601"         // 月曜始まり（USにすると日曜始まり）
-  showNeighboringMonth={false}
-  next2Label={null}
-  prev2Label={null}
-
-  // 曜日ラベルをJSTで
-  formatShortWeekday={(_, date) =>
-    ["日", "月", "火", "水", "木", "金", "土"][dayJST(date)]
-  }
-
-  // 日付の数字をJSTで
-  formatDay={(_, date) =>
-    new Date(date.toLocaleString("en-US", { timeZone: TZ })).getDate().toString()
-  }
-
-  // 強調表示もJST基準
-  tileClassName={({ date, view }) => {
-    if (view !== "month") return "";
-    const iso = dateKeyJST(date);               // JSTのYYYY-MM-DD
-    const isToday = iso === dateKeyJST(new Date());
-    const isEvent = events.some((e) => e.date === iso);
-    const w = dayJST(date);
-    const weekend = w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
-    const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
-    const bg = isEvent ? "!bg-yellow-100" : "";
-    return `${weekend} ${ring} ${bg}`;
-  }}
-/>
-
+                        value={selectedDate}
+                        onChange={(v) => setSelectedDate(v as Date)}
+                        locale="ja-JP"
+                        calendarType="iso8601"         // 月曜始まり（USにすると日曜始まり）
+                        showNeighboringMonth={false}
+                        next2Label={null}
+                        prev2Label={null}
+                        // 曜日ラベルをJSTで
+                        formatShortWeekday={(_, date) =>
+                          ["日", "月", "火", "水", "木", "金", "土"][dayJST(date)]
+                        }
+                        // 日付の数字をJSTで
+                        formatDay={(_, date) =>
+                          new Date(date.toLocaleString("en-US", { timeZone: TZ }))
+                            .getDate()
+                            .toString()
+                        }
+                        // 強調表示もJST基準
+                        tileClassName={({ date, view }) => {
+                          if (view !== "month") return "";
+                          const iso = dateKeyJST(date); // JSTのYYYY-MM-DD
+                          const isToday = iso === dateKeyJST(new Date());
+                          const isEvent = events.some((e) => e.date === iso);
+                          const w = dayJST(date);
+                          const weekend =
+                            w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
+                          const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
+                          const bg = isEvent ? "!bg-yellow-100" : "";
+                          return `${weekend} ${ring} ${bg}`;
+                        }}
+                      />
                     </div>
                   </div>
 
@@ -725,8 +772,7 @@ export default function App() {
                     )}
                     {events.map((e) => {
                       const days = Math.ceil(
-                        (new Date(e.date).getTime() - Date.now()) /
-                          (1000 * 3600 * 24)
+                        (new Date(e.date).getTime() - Date.now()) / (1000 * 3600 * 24)
                       );
                       return (
                         <div
@@ -760,17 +806,8 @@ export default function App() {
 
           {/* ===== 設定 ===== */}
           <TabsContent value="settings" className="space-y-6">
-            <PartsManager
-              parts={parts}
-              setParts={setParts}
-              lifts={lifts}
-              setLifts={setLifts}
-            />
-            <LiftsManager
-              parts={parts}
-              lifts={lifts}
-              setLifts={setLifts}
-            />
+            <PartsManager parts={parts} setParts={setParts} lifts={lifts} setLifts={setLifts} />
+            <LiftsManager parts={parts} lifts={lifts} setLifts={setLifts} />
           </TabsContent>
         </Tabs>
       </div>
@@ -795,14 +832,12 @@ export default function App() {
                   記録タブ：日付/部位/種目で絞り込み、当日のサマリー＋一覧、前回値自動引き継ぎ。
                 </li>
                 <li>
-                  統計タブ：SBDの1RM（reps=1実測）推移。更新日のみ折れ線表示。
+                  統計タブ：SBDの1RM（reps=1実測）推移。<b>前回値持ち越しの折れ線</b>＋<b>SBD合計ライン</b>＋<b>現在の合計MAX</b>を表示。
                 </li>
                 <li>カレンダータブ：イベント登録とJST固定カレンダー。</li>
                 <li>設定タブ：部位/種目の追加・削除・所属変更。</li>
               </ul>
-              <p className="text-neutral-600">
-                ※データはローカルストレージに保存されます。
-              </p>
+              <p className="text-neutral-600">※データはローカルストレージに保存されます。</p>
             </div>
           </div>
         </div>
@@ -901,9 +936,7 @@ function LogTable({
                       key={e.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className={`border-b ${
-                        i % 2 === 0 ? "bg-white" : "bg-neutral-50"
-                      }`}
+                      className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-neutral-50"}`}
                     >
                       <td className="p-2">
                         <input
