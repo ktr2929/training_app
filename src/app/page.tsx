@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   LineChart,
@@ -102,6 +102,7 @@ export default function App() {
   const [lifts, setLifts] = useState<Lift[]>([...DEFAULT_LIFTS]);
   const [entries, setEntries] = useState<SetEntry[]>([]);
   const [events, setEvents] = useState<EventEntry[]>([]);
+  const [loaded, setLoaded] = useState(false); // LocalStorageロード完了フラグ
 
   /* forms */
   const [form, setForm] = useState({
@@ -137,6 +138,7 @@ export default function App() {
       if (E) setEntries(JSON.parse(E));
       if (Ev) setEvents(JSON.parse(Ev));
     } catch {}
+    setLoaded(true);
   }, []);
   useEffect(
     () => localStorage.setItem(LS_PARTS, JSON.stringify(parts)),
@@ -154,6 +156,56 @@ export default function App() {
     () => localStorage.setItem(LS_EVENTS, JSON.stringify(events)),
     [events]
   );
+
+  /* ==== Big3を強制保持 + 別名正規化（初回ロード後に一度だけ） ==== */
+  const fixedOnce = useRef(false);
+  const SBD_CANON: Lift[] = [
+    { id: "Squat", name: "スクワット", part: "脚" },
+    { id: "Bench", name: "ベンチプレス", part: "胸" },
+    { id: "Deadlift", name: "デッドリフト", part: "背中" },
+  ];
+  const SBD_ALIASES: Record<string, "Squat" | "Bench" | "Deadlift"> = {
+    squat: "Squat",
+    SQ: "Squat",
+    スクワット: "Squat",
+    bench: "Bench",
+    BP: "Bench",
+    ベンチ: "Bench",
+    ベンチプレス: "Bench",
+    deadlift: "Deadlift",
+    DL: "Deadlift",
+    デッド: "Deadlift",
+    デッドリフト: "Deadlift",
+  };
+
+  useEffect(() => {
+    if (!loaded || fixedOnce.current) return;
+    fixedOnce.current = true;
+
+    // lifts を修復
+    const ids = new Set(lifts.map((l) => l.id));
+    let nextLifts = [...lifts];
+    for (const c of SBD_CANON) {
+      if (!ids.has(c.id)) nextLifts.push(c);
+      else {
+        // 名前や部位が崩れていたら整える
+        nextLifts = nextLifts.map((l) =>
+          l.id === c.id ? { ...l, name: c.name, part: c.part } : l
+        );
+      }
+    }
+
+    // entries を正規化
+    const normalized = entries.map((e) => {
+      const key = (e.liftId || "").toString();
+      const hit = SBD_ALIASES[key] || SBD_ALIASES[key.toLowerCase()];
+      return hit ? { ...e, liftId: hit } : e;
+    });
+
+    if (JSON.stringify(nextLifts) !== JSON.stringify(lifts)) setLifts(nextLifts);
+    if (JSON.stringify(normalized) !== JSON.stringify(entries))
+      setEntries(normalized);
+  }, [loaded, lifts, entries]);
 
   /* add entry */
   const addEntry = () => {
@@ -181,7 +233,7 @@ export default function App() {
     toast("追加されました！");
   };
 
-  /* delete + undo */
+  /* delete + undo （※一覧からの削除のみ。部位/種目の削除はUI自体を無効化） */
   const deleteByIds = (ids: string[]) => {
     const removed = entries.filter((e) => ids.includes(e.id));
     setLastDeleted(removed);
@@ -229,163 +281,89 @@ export default function App() {
     });
   }, [entries, lifts, fDate, fPart, fLift]);
 
-  // 更新日だけのSBDデータ（点を線で結ぶ用）
-const sbdData = useMemo(() => {
-  type K = "Squat" | "Bench" | "Deadlift";
-
-  // 日ごとの1rep最大
-  const dayMax: Record<K, Map<string, number>> = {
-    Squat: new Map(),
-    Bench: new Map(),
-    Deadlift: new Map(),
-  };
-  for (const e of entries) {
-    if (!isSBD(e.liftId) || e.reps !== 1) continue;
-    const k = e.liftId as K;
-    const d = e.date;
-    dayMax[k].set(d, Math.max(dayMax[k].get(d) ?? -Infinity, e.weight));
-  }
-
-  // その日で“いずれかが更新された日”だけを抽出
-  const allDates = new Set<string>([
-    ...dayMax.Squat.keys(),
-    ...dayMax.Bench.keys(),
-    ...dayMax.Deadlift.keys(),
-  ]);
-  const datesSorted = [...allDates].sort((a, b) => (a < b ? -1 : 1));
-
-  const out: Array<{ date: string; Squat: number | null; Bench: number | null; Deadlift: number | null }> = [];
-  const best: Record<K, number> = { Squat: -Infinity, Bench: -Infinity, Deadlift: -Infinity };
-
-  for (const d of datesSorted) {
-    let changed = false;
-    const row = { date: d, Squat: null as number | null, Bench: null as number | null, Deadlift: null as number | null };
-    (["Squat", "Bench", "Deadlift"] as K[]).forEach((k) => {
-      const v = dayMax[k].get(d);
-      if (v != null && v > best[k]) {
-        best[k] = v;
-        row[k] = v;
-        changed = true;
-      }
-    });
-    if (changed) out.push(row);
-  }
-  return out;
-}, [entries]);
-// sbdData（更新日のみ, 一部nullあり）→ 前回値で埋めて線を切らさない
-const sbdDataCF = useMemo(() => {
-  let prevSq: number | null = null;
-  let prevBp: number | null = null;
-  let prevDl: number | null = null;
-
-  return sbdData.map(r => {
-    const row = {
-      date: r.date,
-      Squat: r.Squat ?? prevSq,
-      Bench: r.Bench ?? prevBp,
-      Deadlift: r.Deadlift ?? prevDl,
-    };
-    if (row.Squat != null) prevSq = row.Squat;
-    if (row.Bench != null) prevBp = row.Bench;
-    if (row.Deadlift != null) prevDl = row.Deadlift;
-    return row;
-  });
-}, [sbdData]);
-
-// Y軸上限をきれいに丸める（見やすさ用）
-const yMax = useMemo(() => {
-  const max = Math.max(
-    0,
-    ...sbdDataCF.flatMap(d => [d.Squat ?? 0, d.Bench ?? 0, d.Deadlift ?? 0])
-  );
-  return Math.ceil(max * 1.05 / 10) * 10;
-}, [sbdDataCF]);
-
-// KPI（最新行の合計）
-const kpiTotal = useMemo(() => {
-  const last = sbdDataCF.at(-1);
-  if (!last) return 0;
-  return (last.Squat ?? 0) + (last.Bench ?? 0) + (last.Deadlift ?? 0);
-}, [sbdDataCF]);
-
-
-
-  /* ===== stats helpers: forward-fill daily series ===== */
-  function daysBetweenJST(startISO: string, endISO: string): string[] {
-    const out: string[] = [];
-    const d0 = new Date(`${startISO}T00:00:00+09:00`);
-    const d1 = new Date(`${endISO}T00:00:00+09:00`);
-    for (let d = new Date(d0); d <= d1; d.setDate(d.getDate() + 1)) {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const da = String(d.getDate()).padStart(2, "0");
-      out.push(`${y}-${m}-${da}`);
-    }
-    return out;
-  }
-
-  type SbdRow = {
-    date: string;
-    Squat: number | null;
-    Bench: number | null;
-    Deadlift: number | null;
-    Total: number | null;
-  };
-
-  function buildSbdSeries(allEntries: SetEntry[]): SbdRow[] {
-    // reps=1 のSBDのみ抽出し、日付×種目のその日最大を作る
-    const dayMax: Record<"Squat" | "Bench" | "Deadlift", Map<string, number>> = {
+  /* ===== stats: 更新日のみ（その日に更新があった種目だけ値が入り、他はnull） ===== */
+  const sbdData = useMemo(() => {
+    type K = "Squat" | "Bench" | "Deadlift";
+    const dayMax: Record<K, Map<string, number>> = {
       Squat: new Map(),
       Bench: new Map(),
       Deadlift: new Map(),
     };
-    const sbdEntries = allEntries.filter((e) => isSBD(e.liftId) && e.reps === 1);
-    if (sbdEntries.length === 0) return [];
-
-    let minDate = sbdEntries[0].date;
-    let maxDate = sbdEntries[0].date;
-
-    for (const e of sbdEntries) {
-      const k = e.liftId as "Squat" | "Bench" | "Deadlift";
+    for (const e of entries) {
+      if (!isSBD(e.liftId) || e.reps !== 1) continue;
+      const k = e.liftId as K;
       const d = e.date;
       dayMax[k].set(d, Math.max(dayMax[k].get(d) ?? -Infinity, e.weight));
-      if (d < minDate) minDate = d;
-      if (d > maxDate) maxDate = d;
     }
+    const allDates = new Set<string>([
+      ...dayMax.Squat.keys(),
+      ...dayMax.Bench.keys(),
+      ...dayMax.Deadlift.keys(),
+    ]);
+    const datesSorted = [...allDates].sort((a, b) => (a < b ? -1 : 1));
 
-    const days = daysBetweenJST(minDate, maxDate);
+    const out: Array<{
+      date: string;
+      Squat: number | null;
+      Bench: number | null;
+      Deadlift: number | null;
+    }> = [];
+    const best: Record<K, number> = {
+      Squat: -Infinity,
+      Bench: -Infinity,
+      Deadlift: -Infinity,
+    };
 
-    // 前回値を持ち越し（初出現前は null）
-    let last: Partial<Record<"Squat" | "Bench" | "Deadlift", number>> = {};
-    const series: SbdRow[] = days.map((date) => {
-      const squat = dayMax.Squat.get(date) ?? (last.Squat ?? null);
-      const bench = dayMax.Bench.get(date) ?? (last.Bench ?? null);
-      const deadlift = dayMax.Deadlift.get(date) ?? (last.Deadlift ?? null);
+    for (const d of datesSorted) {
+      let changed = false;
+      const row: { date: string; Squat: number | null; Bench: number | null; Deadlift: number | null } =
+        { date: d, Squat: null, Bench: null, Deadlift: null };
+      (["Squat", "Bench", "Deadlift"] as K[]).forEach((k) => {
+        const v = dayMax[k].get(d);
+        if (v != null && v > best[k]) {
+          best[k] = v;
+          row[k] = v;
+          changed = true;
+        }
+      });
+      if (changed) out.push(row);
+    }
+    return out;
+  }, [entries]);
 
-      if (dayMax.Squat.has(date)) last.Squat = dayMax.Squat.get(date)!;
-      if (dayMax.Bench.has(date)) last.Bench = dayMax.Bench.get(date)!;
-      if (dayMax.Deadlift.has(date)) last.Deadlift = dayMax.Deadlift.get(date)!;
+  /* ===== sbdData を前回値で持ち越して線を連続化（更新日ベース） ===== */
+  const sbdDataCF = useMemo(() => {
+    let prevSq: number | null = null;
+    let prevBp: number | null = null;
+    let prevDl: number | null = null;
 
-      const total =
-        squat != null && bench != null && deadlift != null
-          ? squat + bench + deadlift
-          : null;
-
-      return { date, Squat: squat, Bench: bench, Deadlift: deadlift, Total: total };
+    return sbdData.map((r) => {
+      const row = {
+        date: r.date,
+        Squat: r.Squat ?? prevSq,
+        Bench: r.Bench ?? prevBp,
+        Deadlift: r.Deadlift ?? prevDl,
+      };
+      if (row.Squat != null) prevSq = row.Squat;
+      if (row.Bench != null) prevBp = row.Bench;
+      if (row.Deadlift != null) prevDl = row.Deadlift;
+      return row;
     });
+  }, [sbdData]);
 
-    return series;
-  }
+  const yMax = useMemo(() => {
+    const max = Math.max(
+      0,
+      ...sbdDataCF.flatMap((d) => [d.Squat ?? 0, d.Bench ?? 0, d.Deadlift ?? 0])
+    );
+    return Math.ceil((max * 1.05) / 10) * 10;
+  }, [sbdDataCF]);
 
-  function currentSbdTotalMax(series: SbdRow[]): number {
-    let best = 0;
-    for (const r of series) if (r.Total != null) best = Math.max(best, r.Total);
-    return best;
-  }
-
-  /* ===== stats: SBD forward-filled line & total ===== */
-  const sbdSeries = useMemo(() => buildSbdSeries(entries), [entries]);
-  const sbdMaxNow = useMemo(() => currentSbdTotalMax(sbdSeries), [sbdSeries]);
+  const kpiTotal = useMemo(() => {
+    const last = sbdDataCF.at(-1);
+    if (!last) return 0;
+    return (last.Squat ?? 0) + (last.Bench ?? 0) + (last.Deadlift ?? 0);
+  }, [sbdDataCF]);
 
   /* ====== day summary for selected date in filter (optional card) ====== */
   const daySummary = useMemo(() => {
@@ -679,98 +657,88 @@ const kpiTotal = useMemo(() => {
           </TabsContent>
 
           {/* ===== 統計 ===== */}
-<TabsContent value="stats" className="space-y-4">
-  <Card className="shadow-sm">
-    <CardContent className="p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <BarChart2 className="w-4 h-4" />
-        <h3 className="font-semibold">
-          SBDマックス値推移（reps=1 実測／更新日のみ・点を線で結ぶ）
-        </h3>
-      </div>
+          <TabsContent value="stats" className="space-y-4">
+            <Card className="shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart2 className="w-4 h-4" />
+                  <h3 className="font-semibold">
+                    SBDマックス値推移（reps=1 実測／更新日のみ・点を線で結ぶ）
+                  </h3>
+                </div>
 
-      {/* KPI: 現在のSBD合計マックス（グラフは描かない） */}
-      <div className="mb-2">
-        <div className="text-neutral-500 text-xs">現在のSBD合計マックス</div>
-        <div className="text-5xl font-extrabold leading-tight">
-          {
-            // sbdDataは{date,Squat,Bench,Deadlift}の更新日だけの配列
-            (() => {
-              if (!sbdData.length) return 0;
-              const last = sbdData[sbdData.length - 1];
-              const sq = last.Squat ?? 0;
-              const bp = last.Bench ?? 0;
-              const dl = last.Deadlift ?? 0;
-              return sq + bp + dl;
-            })()
-          }
-        </div>
-        <div className="text-neutral-500 text-xs">
-          （ベストSQ + ベストBP + ベストDL の合計）
-        </div>
-      </div>
+                {/* KPI: 現在のSBD合計マックス（グラフは描かない） */}
+                <div className="mb-2">
+                  <div className="text-neutral-500 text-xs">
+                    現在のSBD合計マックス
+                  </div>
+                  <div className="text-5xl font-extrabold leading-tight">
+                    {kpiTotal}
+                  </div>
+                  <div className="text-neutral-500 text-xs">
+                    （ベストSQ + ベストBP + ベストDL の合計）
+                  </div>
+                </div>
 
-      {/* 折れ線（更新日の点どうしを直線で結ぶ） */}
-      <div className="w-full h-[340px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart
-            data={sbdDataCF} // ← carry-forwardせず、更新日だけ
-            margin={{ top: 8, right: 16, left: 12, bottom: 8 }}
-          >
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis
-              dataKey="date"
-              interval="preserveStartEnd"  // 端は残して適度に間引き
-              minTickGap={40}              // 近い目盛りは自動で削減
-              tickFormatter={(d) => d.slice(0, 7)} // "YYYY-MM"
-              tick={{ fontSize: 12 }}
-              tickLine={false}
-            />
-            <YAxis
-              allowDecimals={false}
-              domain={[0, 'dataMax + 10']}
-              tick={{ fontSize: 12 }}
-              width={40}
-            />
-            <Tooltip
-              formatter={(v: any, name) => [`${v} kg`, name]}
-              labelFormatter={(x) => `日付: ${x}`}
-            />
-            <Legend verticalAlign="top" height={24} />
+                {/* 折れ線（更新日の点どうしを直線で結ぶ。未更新種目は前回値で持ち越し） */}
+                <div className="w-full h-[340px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={sbdDataCF}
+                      margin={{ top: 8, right: 16, left: 12, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="date"
+                        interval="preserveStartEnd"
+                        minTickGap={40}
+                        tickFormatter={(d) => d.slice(0, 7)} // YYYY-MM
+                        tick={{ fontSize: 12 }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        allowDecimals={false}
+                        domain={[0, yMax]}
+                        tick={{ fontSize: 12 }}
+                        width={40}
+                      />
+                      <Tooltip
+                        formatter={(v: any, name) => [`${v} kg`, name]}
+                        labelFormatter={(x) => `日付: ${x}`}
+                      />
+                      <Legend verticalAlign="top" height={24} />
 
-            {/* 3種目だけ描画（合計は描かない） */}
-            <Line
-              type="linear"
-              dataKey="Squat"
-              name="Squat"
-              stroke="#2563eb"
-              strokeWidth={2.5}
-              dot={{ r: 3 }}
-              // connectNulls は使わない：更新日だけの配列なので自然に点同士が結ばれる
-            />
-            <Line
-              type="linear"
-              dataKey="Bench"
-              name="Bench"
-              stroke="#ef4444"
-              strokeWidth={2.5}
-              dot={{ r: 3 }}
-            />
-            <Line
-              type="linear"
-              dataKey="Deadlift"
-              name="Deadlift"
-              stroke="#10b981"
-              strokeWidth={2.5}
-              dot={{ r: 3 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </CardContent>
-  </Card>
-</TabsContent>
-
+                      {/* 3種目のみ表示（合計線は描かない） */}
+                      <Line
+                        type="linear"
+                        dataKey="Squat"
+                        name="Squat"
+                        stroke="#2563eb"
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                      />
+                      <Line
+                        type="linear"
+                        dataKey="Bench"
+                        name="Bench"
+                        stroke="#ef4444"
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                      />
+                      <Line
+                        type="linear"
+                        dataKey="Deadlift"
+                        name="Deadlift"
+                        stroke="#10b981"
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* ===== カレンダー ===== */}
           <TabsContent value="calendar" className="space-y-4">
@@ -836,24 +804,23 @@ const kpiTotal = useMemo(() => {
                         value={selectedDate}
                         onChange={(v) => setSelectedDate(v as Date)}
                         locale="ja-JP"
-                        calendarType="iso8601"         // 月曜始まり（USにすると日曜始まり）
+                        calendarType="iso8601"
                         showNeighboringMonth={false}
                         next2Label={null}
                         prev2Label={null}
-                        // 曜日ラベルをJSTで
                         formatShortWeekday={(_, date) =>
                           ["日", "月", "火", "水", "木", "金", "土"][dayJST(date)]
                         }
-                        // 日付の数字をJSTで
                         formatDay={(_, date) =>
-                          new Date(date.toLocaleString("en-US", { timeZone: TZ }))
+                          new Date(
+                            date.toLocaleString("en-US", { timeZone: TZ })
+                          )
                             .getDate()
                             .toString()
                         }
-                        // 強調表示もJST基準
                         tileClassName={({ date, view }) => {
                           if (view !== "month") return "";
-                          const iso = dateKeyJST(date); // JSTのYYYY-MM-DD
+                          const iso = dateKeyJST(date);
                           const isToday = iso === dateKeyJST(new Date());
                           const isEvent = events.some((e) => e.date === iso);
                           const w = dayJST(date);
@@ -911,7 +878,12 @@ const kpiTotal = useMemo(() => {
 
           {/* ===== 設定 ===== */}
           <TabsContent value="settings" className="space-y-6">
-            <PartsManager parts={parts} setParts={setParts} lifts={lifts} setLifts={setLifts} />
+            <PartsManager
+              parts={parts}
+              setParts={setParts}
+              lifts={lifts}
+              setLifts={setLifts}
+            />
             <LiftsManager parts={parts} lifts={lifts} setLifts={setLifts} />
           </TabsContent>
         </Tabs>
@@ -937,10 +909,10 @@ const kpiTotal = useMemo(() => {
                   記録タブ：日付/部位/種目で絞り込み、当日のサマリー＋一覧、前回値自動引き継ぎ。
                 </li>
                 <li>
-                  統計タブ：SBDの1RM（reps=1実測）推移。<b>前回値持ち越しの折れ線</b>＋<b>SBD合計ライン</b>＋<b>現在の合計MAX</b>を表示。
+                  統計タブ：SBDの1RM（reps=1実測）推移。更新日のみ表示、未更新種目は前回値で持ち越し。
                 </li>
                 <li>カレンダータブ：イベント登録とJST固定カレンダー。</li>
-                <li>設定タブ：部位/種目の追加・削除・所属変更。</li>
+                <li>設定タブ：部位/種目の追加・部位変更（削除は無効化）。</li>
               </ul>
               <p className="text-neutral-600">※データはローカルストレージに保存されます。</p>
             </div>
@@ -1041,7 +1013,9 @@ function LogTable({
                       key={e.id}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className={`border-b ${i % 2 === 0 ? "bg-white" : "bg-neutral-50"}`}
+                      className={`border-b ${
+                        i % 2 === 0 ? "bg-white" : "bg-neutral-50"
+                      }`}
                     >
                       <td className="p-2">
                         <input
@@ -1086,7 +1060,7 @@ function PartsManager({
   return (
     <Card className="shadow-sm">
       <CardContent className="p-4 space-y-4">
-        <h3 className="font-semibold">部位の管理</h3>
+        <h3 className="font-semibold">部位の管理（追加のみ／削除不可）</h3>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
           <Input
             className="h-9"
@@ -1110,25 +1084,10 @@ function PartsManager({
           {parts.map((p) => (
             <div
               key={p}
-              className="px-3 py-1 rounded-full border text-sm flex items-center gap-2"
+              className="px-3 py-1 rounded-full border text-sm bg-neutral-50"
+              title="部位の削除は無効化しています"
             >
               {p}
-              <Button
-                className="inline-flex items-center gap-2"
-                size="icon"
-                variant="ghost"
-                title="削除"
-                onClick={() => {
-                  const remain = parts.filter((x) => x !== p);
-                  const fallback = remain[0] || "胸";
-                  setParts(remain.length ? remain : ["胸"]);
-                  setLifts(
-                    lifts.map((l) => (l.part === p ? { ...l, part: fallback } : l))
-                  );
-                }}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
             </div>
           ))}
         </div>
@@ -1150,14 +1109,13 @@ function LiftsManager({
   const [newLiftPart, setNewLiftPart] = useState<Part>(parts[0] || "胸");
   const [editLiftId, setEditLiftId] = useState<LiftId | "">("");
   const [editLiftPart, setEditLiftPart] = useState<Part>(parts[0] || "胸");
-  const isDefaultSBD = (id: string) =>
-    ["Bench", "Squat", "Deadlift"].includes(id);
 
   return (
     <Card className="shadow-sm">
       <CardContent className="p-4 space-y-4">
-        <h3 className="font-semibold">種目の管理（追加/削除/所属変更）</h3>
+        <h3 className="font-semibold">種目の管理（追加／部位変更のみ・削除不可）</h3>
 
+        {/* 追加 */}
         <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_120px] gap-2">
           <Input
             className="h-9"
@@ -1195,7 +1153,8 @@ function LiftsManager({
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_120px_120px] gap-2">
+        {/* 部位変更 */}
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_120px] gap-2">
           <Select
             value={editLiftId}
             onValueChange={(v) => {
@@ -1237,29 +1196,18 @@ function LiftsManager({
             onClick={() => {
               if (!editLiftId) return;
               setLifts(
-                lifts.map((l) => (l.id === editLiftId ? { ...l, part: editLiftPart } : l))
+                lifts.map((l) =>
+                  l.id === editLiftId ? { ...l, part: editLiftPart } : l
+                )
               );
             }}
           >
             部位を変更
           </Button>
-
-          <Button
-            className="w-full"
-            variant="destructive"
-            onClick={() => {
-              if (!editLiftId) return;
-              if (isDefaultSBD(editLiftId)) return;
-              setLifts(lifts.filter((l) => l.id !== editLiftId));
-              setEditLiftId("");
-            }}
-          >
-            種目を削除
-          </Button>
         </div>
 
         <p className="text-xs text-neutral-500">
-          ※ SBD（ベンチ/スクワット/デッドリフト）は削除できません。
+          ※ Big3（スクワット/ベンチ/デッドリフト）は常に保持され、削除できません。
         </p>
       </CardContent>
     </Card>
