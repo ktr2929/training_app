@@ -34,6 +34,15 @@ import {
 import CalendarView from "react-calendar";
 import { PressableButton as Button } from "@/components/ui/pressable-button";
 
+// ★ 追加：localStorageはここ経由にする
+import {
+  loadKintore,
+  saveParts,
+  saveLifts,
+  saveEntries,
+  saveEvents,
+} from "@/lib/kintoreStorage";
+
 /* ================= JST helpers ================= */
 const TZ = "Asia/Tokyo";
 // YYYY-MM-DD を JST で安定生成
@@ -61,12 +70,6 @@ type PartFilter = "All" | Part;
 type LiftFilter = "All" | LiftId;
 
 /* ================= constants ================= */
-const LS_PREFIX = "kintore-v3";
-const LS_ENTRIES = `${LS_PREFIX}:entries`;
-const LS_LIFTS = `${LS_PREFIX}:lifts`;
-const LS_PARTS = `${LS_PREFIX}:parts`;
-const LS_EVENTS = `${LS_PREFIX}:events`;
-
 const DEFAULT_PARTS: Part[] = ["胸", "脚", "背中", "肩", "三頭", "二頭"];
 const DEFAULT_LIFTS: Lift[] = [
   { id: "Bench", name: "ベンチプレス", part: "胸" },
@@ -128,34 +131,17 @@ export default function App() {
 
   /* storage load/save */
   useEffect(() => {
-    try {
-      const P = localStorage.getItem(LS_PARTS);
-      const L = localStorage.getItem(LS_LIFTS);
-      const E = localStorage.getItem(LS_ENTRIES);
-      const Ev = localStorage.getItem(LS_EVENTS);
-      if (P) setParts(JSON.parse(P));
-      if (L) setLifts(JSON.parse(L));
-      if (E) setEntries(JSON.parse(E));
-      if (Ev) setEvents(JSON.parse(Ev));
-    } catch {}
+    const { parts: P, lifts: L, entries: E, events: Ev } = loadKintore();
+    if (P) setParts(P);
+    if (L) setLifts(L);
+    if (E) setEntries(E);
+    if (Ev) setEvents(Ev);
     setLoaded(true);
   }, []);
-  useEffect(
-    () => localStorage.setItem(LS_PARTS, JSON.stringify(parts)),
-    [parts]
-  );
-  useEffect(
-    () => localStorage.setItem(LS_LIFTS, JSON.stringify(lifts)),
-    [lifts]
-  );
-  useEffect(
-    () => localStorage.setItem(LS_ENTRIES, JSON.stringify(entries)),
-    [entries]
-  );
-  useEffect(
-    () => localStorage.setItem(LS_EVENTS, JSON.stringify(events)),
-    [events]
-  );
+  useEffect(() => saveParts(parts), [parts]);
+  useEffect(() => saveLifts(lifts), [lifts]);
+  useEffect(() => saveEntries(entries), [entries]);
+  useEffect(() => saveEvents(events), [events]);
 
   /* ==== Big3を強制保持 + 別名正規化（初回ロード後に一度だけ） ==== */
   const fixedOnce = useRef(false);
@@ -316,8 +302,12 @@ export default function App() {
 
     for (const d of datesSorted) {
       let changed = false;
-      const row: { date: string; Squat: number | null; Bench: number | null; Deadlift: number | null } =
-        { date: d, Squat: null, Bench: null, Deadlift: null };
+      const row: {
+        date: string;
+        Squat: number | null;
+        Bench: number | null;
+        Deadlift: number | null;
+      } = { date: d, Squat: null, Bench: null, Deadlift: null };
       (["Squat", "Bench", "Deadlift"] as K[]).forEach((k) => {
         const v = dayMax[k].get(d);
         if (v != null && v > best[k]) {
@@ -825,8 +815,14 @@ export default function App() {
                           const isEvent = events.some((e) => e.date === iso);
                           const w = dayJST(date);
                           const weekend =
-                            w === 0 ? "text-red-500" : w === 6 ? "text-blue-600" : "";
-                          const ring = isToday ? "ring-2 ring-amber-500 rounded-md" : "";
+                            w === 0
+                              ? "text-red-500"
+                              : w === 6
+                              ? "text-blue-600"
+                              : "";
+                          const ring = isToday
+                            ? "ring-2 ring-amber-500 rounded-md"
+                            : "";
                           const bg = isEvent ? "!bg-yellow-100" : "";
                           return `${weekend} ${ring} ${bg}`;
                         }}
@@ -844,7 +840,8 @@ export default function App() {
                     )}
                     {events.map((e) => {
                       const days = Math.ceil(
-                        (new Date(e.date).getTime() - Date.now()) / (1000 * 3600 * 24)
+                        (new Date(e.date).getTime() - Date.now()) /
+                          (1000 * 3600 * 24)
                       );
                       return (
                         <div
@@ -914,7 +911,9 @@ export default function App() {
                 <li>カレンダータブ：イベント登録とJST固定カレンダー。</li>
                 <li>設定タブ：部位/種目の追加・部位変更（削除は無効化）。</li>
               </ul>
-              <p className="text-neutral-600">※データはローカルストレージに保存されます。</p>
+              <p className="text-neutral-600">
+                ※データはローカルストレージに保存されます。
+              </p>
             </div>
           </div>
         </div>
